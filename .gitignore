@@ -29,6 +29,7 @@ dist-ssr
 coverage
 *.tsbuildinfo
 .eslintcache
+.next/
 
 # ---- Python（递归匹配所有层级）----
 __pycache__/
@@ -41,3 +42,4 @@ venv/
 .ruff_cache/
 .coverage
 htmlcov/
+.nuxt/
