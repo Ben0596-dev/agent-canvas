@@ -7,13 +7,12 @@ cd web && pnpm install && pnpm check
 cd ../backend && go test ./... && go vet ./...
 ```
 
-根目录不是 Node 工程，不放置 `package.json` 或 Node lockfile。Next.js、Husky、Commitlint、lint-staged 和 Prettier 全部由 `web/package.json` 与 `web/pnpm-lock.yaml` 管理。不要在仓库中引入 npm、yarn 或其他重复 lockfile。
+根目录不是 Node 工程，不放置 `package.json` 或 Node lockfile。Next.js、Husky、Commitlint 和 Prettier 全部由 `web/package.json` 与 `web/pnpm-lock.yaml` 管理。不要在仓库中引入 npm、yarn 或其他重复 lockfile。
 
 提交时由 Husky 自动执行：
 
-- `pre-commit`: lint-staged，执行 ESLint 和 Prettier
-- `commit-msg`: Commitlint，校验 Conventional Commits
-- `pre-push`: 执行 `pnpm --dir web check`
+- `commit-msg`: Commitlint，仅校验 Conventional Commits
+- `pre-push`: 执行 `pnpm --dir web check:push`，只做类型检查、测试和构建，不执行 ESLint
 
 ## 模块边界
 

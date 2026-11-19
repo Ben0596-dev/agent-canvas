@@ -14,7 +14,8 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "check": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm test && pnpm build"
+    "check": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm test && pnpm build",
+    "check:push": "pnpm typecheck && pnpm test && pnpm build"
   },
   "dependencies": {
     "next": "16.4.6",
@@ -31,7 +32,6 @@
     "eslint": "^9",
     "eslint-config-next": "16.4.6",
     "husky": "^9.1.7",
-    "lint-staged": "^16.2.7",
     "prettier": "^3.8.2",
     "tailwindcss": "4.3.3",
     "typescript": "^5",
