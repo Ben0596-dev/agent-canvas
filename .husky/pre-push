@@ -1,1 +1,0 @@
-pnpm --dir web check:push
