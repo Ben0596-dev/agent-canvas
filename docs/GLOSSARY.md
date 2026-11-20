@@ -8,6 +8,14 @@
 
 画布中的最小可操作对象，例如文本、图片、配置或 Agent 结果。节点拥有稳定标识、类型、位置和业务数据。
 
+## Operation Batch
+
+一次原子提交中的有序 Canvas Operation 集合。批次中的任意操作校验失败时，整个批次都不会改变项目。
+
+## Agent Proposal
+
+Agent Run 返回、等待用户确认的自然语言说明和可选 Operation Batch。Proposal 本身不是项目变更，只有确认提交成功后才会产生新的 Revision。
+
 ## Canvas Operation
 
 对 Canvas Project 的一个结构化变更，例如新增节点、移动节点、建立连线或删除节点。用户操作和 Agent 操作都必须表达为 Canvas Operation。
