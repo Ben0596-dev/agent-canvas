@@ -89,6 +89,17 @@ func (s *ProjectService) Rename(ctx context.Context, id string, title string) (m
 	return project, err
 }
 
+func (s *ProjectService) UpdateViewport(ctx context.Context, id string, viewport model.Viewport) (model.Project, error) {
+	if viewport.Zoom < 0.1 || viewport.Zoom > 4 {
+		return model.Project{}, fmt.Errorf("%w: viewport zoom must be between 0.1 and 4", ErrInvalidOperation)
+	}
+	updated, err := s.repository.UpdateViewport(ctx, id, viewport, s.now())
+	if errors.Is(err, repository.ErrProjectNotFound) {
+		return model.Project{}, ErrProjectNotFound
+	}
+	return updated, err
+}
+
 func (s *ProjectService) Delete(ctx context.Context, id string) error {
 	err := s.repository.Delete(ctx, id)
 	if errors.Is(err, repository.ErrProjectNotFound) {
@@ -145,6 +156,29 @@ func (s *ProjectService) ApplyOperations(ctx context.Context, projectID string, 
 	return updated, err
 }
 
+func (s *ProjectService) PreviewOperations(ctx context.Context, projectID string, expectedRevision int64, operations []model.CanvasOperation) error {
+	project, err := s.Get(ctx, projectID)
+	if err != nil {
+		return err
+	}
+	if project.Revision != expectedRevision {
+		return &RevisionConflictError{CurrentRevision: project.Revision}
+	}
+	if len(operations) > 100 {
+		return fmt.Errorf("%w: operation batch exceeds 100 operations", ErrInvalidOperation)
+	}
+	var snapshot model.CanvasSnapshot
+	if err := json.Unmarshal(project.SnapshotJSON, &snapshot); err != nil {
+		return fmt.Errorf("decode project snapshot: %w", err)
+	}
+	for index, operation := range operations {
+		if err := applyOperation(&snapshot, operation); err != nil {
+			return fmt.Errorf("%w at index %d: %v", ErrInvalidOperation, index, err)
+		}
+	}
+	return nil
+}
+
 func applyOperation(snapshot *model.CanvasSnapshot, operation model.CanvasOperation) error {
 	switch operation.Type {
 	case model.OperationNodeCreate:
@@ -172,11 +206,14 @@ func applyNodeCreate(snapshot *model.CanvasSnapshot, input *model.CanvasNode) er
 	if strings.TrimSpace(node.ID) == "" || len(node.ID) > 64 {
 		return errors.New("node id must contain 1 to 64 characters")
 	}
-	if node.Type != model.NodeTypeText {
-		return errors.New("node type must be text")
+	if node.Type != model.NodeTypeText && node.Type != model.NodeTypeImage && node.Type != model.NodeTypeVideo {
+		return errors.New("node type must be text, image, or video")
 	}
-	if strings.TrimSpace(node.Data.Text) == "" {
+	if node.Type == model.NodeTypeText && strings.TrimSpace(node.Data.Text) == "" {
 		return errors.New("text node content is required")
+	}
+	if (node.Type == model.NodeTypeImage || node.Type == model.NodeTypeVideo) && strings.TrimSpace(node.Data.URL) == "" {
+		return errors.New("media node URL is required")
 	}
 	if node.Size.Width <= 0 || node.Size.Height <= 0 {
 		return errors.New("node size must be positive")
@@ -205,7 +242,7 @@ func applyNodeUpdate(snapshot *model.CanvasSnapshot, operation model.CanvasOpera
 		snapshot.Nodes[index].Title = *operation.Title
 	}
 	if operation.Data != nil {
-		if strings.TrimSpace(operation.Data.Text) == "" {
+		if snapshot.Nodes[index].Type == model.NodeTypeText && strings.TrimSpace(operation.Data.Text) == "" {
 			return errors.New("text node content is required")
 		}
 		snapshot.Nodes[index].Data = *operation.Data

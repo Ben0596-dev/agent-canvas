@@ -20,7 +20,8 @@ type createProjectRequest struct {
 }
 
 type updateProjectRequest struct {
-	Title string `json:"title" binding:"required"`
+	Title    *string         `json:"title"`
+	Viewport *model.Viewport `json:"viewport"`
 }
 
 type projectResponse struct {
@@ -131,11 +132,23 @@ func (controller *ProjectController) rename(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"code": "invalid_request", "message": "title is required"})
 		return
 	}
-	updated, err := controller.service.Rename(c.Request.Context(), c.Param("projectId"), request.Title)
+	if request.Title == nil && request.Viewport == nil {
+		c.JSON(http.StatusBadRequest, gin.H{"code": "invalid_request", "message": "title or viewport is required"})
+		return
+	}
+	var updated model.Project
+	var err error
+	if request.Title != nil {
+		updated, err = controller.service.Rename(c.Request.Context(), c.Param("projectId"), *request.Title)
+	} else {
+		updated, err = controller.service.UpdateViewport(c.Request.Context(), c.Param("projectId"), *request.Viewport)
+	}
 	if err != nil {
 		switch {
 		case errors.Is(err, service.ErrInvalidProjectTitle):
 			c.JSON(http.StatusBadRequest, gin.H{"code": "invalid_title", "message": err.Error()})
+		case errors.Is(err, service.ErrInvalidOperation):
+			c.JSON(http.StatusBadRequest, gin.H{"code": "invalid_viewport", "message": err.Error()})
 		case errors.Is(err, service.ErrProjectNotFound):
 			c.JSON(http.StatusNotFound, gin.H{"code": "project_not_found", "message": "project not found"})
 		default:

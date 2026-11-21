@@ -1,4 +1,9 @@
-import type { CanvasOperation, Project, ProjectSummary } from "@/domain/canvas/types";
+import type {
+  CanvasOperation,
+  CanvasViewport,
+  Project,
+  ProjectSummary,
+} from "@/domain/canvas/types";
 
 const apiBase = "/backend-api/api/v1";
 
@@ -28,6 +33,16 @@ export function getProject(projectId: string): Promise<Project> {
 
 export function deleteProject(projectId: string): Promise<void> {
   return request(`/projects/${encodeURIComponent(projectId)}`, { method: "DELETE" });
+}
+
+export function updateProjectViewport(
+  projectId: string,
+  viewport: CanvasViewport,
+): Promise<Project> {
+  return request(`/projects/${encodeURIComponent(projectId)}`, {
+    method: "PATCH",
+    body: JSON.stringify({ viewport }),
+  });
 }
 
 export async function applyOperations(

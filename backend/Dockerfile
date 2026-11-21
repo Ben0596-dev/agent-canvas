@@ -7,6 +7,7 @@ RUN CGO_ENABLED=0 go build -o /out/server ./cmd/server
 
 FROM alpine:3.22
 RUN adduser -D -H app
+WORKDIR /app
 USER app
 COPY --from=build /out/server /server
 EXPOSE 8080

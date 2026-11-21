@@ -1,26 +1,4 @@
 services:
-  backend:
-    build: ./backend
-    environment:
-      APP_ENV: development
-      HTTP_ADDR: :8080
-      DATABASE_URL: postgres://agent_canvas:agent_canvas@postgres:5432/agent_canvas?sslmode=disable
-    ports:
-      - "8080:8080"
-    depends_on:
-      postgres:
-        condition: service_healthy
-  web:
-    build:
-      context: ./web
-      args:
-        BACKEND_INTERNAL_URL: http://backend:8080
-    environment:
-      BACKEND_INTERNAL_URL: http://backend:8080
-    ports:
-      - "3000:3000"
-    depends_on:
-      - backend
   postgres:
     image: postgres:17-alpine
     environment:
@@ -28,7 +6,7 @@ services:
       POSTGRES_USER: agent_canvas
       POSTGRES_PASSWORD: agent_canvas
     ports:
-      - "5432:5432"
+      - "${POSTGRES_PORT:-5432}:5432"
     volumes:
       - ./backend/migrations:/docker-entrypoint-initdb.d:ro
     healthcheck:

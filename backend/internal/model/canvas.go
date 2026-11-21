@@ -2,6 +2,8 @@ package model
 
 const (
 	NodeTypeText        = "text"
+	NodeTypeImage       = "image"
+	NodeTypeVideo       = "video"
 	OperationNodeCreate = "node.create"
 	OperationNodeUpdate = "node.update"
 	OperationNodeMove   = "node.move"
@@ -48,7 +50,11 @@ type Viewport struct {
 }
 
 type CanvasNodeData struct {
-	Text string `json:"text"`
+	Text     string `json:"text,omitempty"`
+	URL      string `json:"url,omitempty"`
+	CoverURL string `json:"coverUrl,omitempty"`
+	Prompt   string `json:"prompt,omitempty"`
+	TaskID   string `json:"taskId,omitempty"`
 }
 
 type CanvasOperation struct {

@@ -121,10 +121,198 @@ paths:
           $ref: "#/components/responses/NotFound"
         "409":
           $ref: "#/components/responses/RevisionConflict"
+  /projects/{projectId}/agent/sessions:
+    parameters:
+      - $ref: "#/components/parameters/ProjectId"
+    get:
+      operationId: listAgentSessions
+      responses:
+        "200":
+          description: Agent sessions for the project.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/AgentSession"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /projects/{projectId}/agent/runs:
+    parameters:
+      - $ref: "#/components/parameters/ProjectId"
+    post:
+      operationId: createAgentRun
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateAgentRunRequest"
+      responses:
+        "202":
+          description: Agent run accepted.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AgentRun"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /projects/{projectId}/agent/sessions/{sessionId}/runs:
+    parameters:
+      - $ref: "#/components/parameters/ProjectId"
+      - name: sessionId
+        in: path
+        required: true
+        schema: { type: string, minLength: 1, maxLength: 64 }
+    get:
+      operationId: listAgentSessionRuns
+      responses:
+        "200":
+          description: Runs in an Agent session ordered by creation time.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/AgentRun"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /agent/runs/{runId}:
+    parameters:
+      - $ref: "#/components/parameters/RunId"
+    get:
+      operationId: getAgentRun
+      responses:
+        "200":
+          description: Current Agent run state.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AgentRun"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /agent/runs/{runId}/events:
+    parameters:
+      - $ref: "#/components/parameters/RunId"
+    get:
+      operationId: streamAgentRunEvents
+      responses:
+        "200":
+          description: Agent run event stream.
+          content:
+            text/event-stream:
+              schema:
+                type: string
+              x-sse-events:
+                - event: run.started
+                  payload: { $ref: "#/components/schemas/AgentRun" }
+                - event: operation.proposed
+                  payload: { $ref: "#/components/schemas/AgentProposal" }
+                - event: run.completed
+                  payload: { $ref: "#/components/schemas/AgentRun" }
+                - event: run.failed
+                  payload: { $ref: "#/components/schemas/AgentRun" }
+                - event: run.cancelled
+                  payload: { $ref: "#/components/schemas/AgentRun" }
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /agent/runs/{runId}/cancel:
+    parameters:
+      - $ref: "#/components/parameters/RunId"
+    post:
+      operationId: cancelAgentRun
+      responses:
+        "200":
+          description: Agent run cancelled or already terminal.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AgentRun"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /models:
+    get:
+      operationId: listModels
+      responses:
+        "200":
+          description: Enabled internal model profiles.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/ModelProfile"
+  /projects/{projectId}/generations:
+    parameters:
+      - $ref: "#/components/parameters/ProjectId"
+    post:
+      operationId: createGenerationTask
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateGenerationRequest"
+      responses:
+        "202":
+          description: Generation task accepted.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GenerationTask"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "503":
+          description: The selected provider is not configured.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /generation-tasks/{taskId}:
+    parameters:
+      - name: taskId
+        in: path
+        required: true
+        schema: { type: string, minLength: 1, maxLength: 64 }
+    get:
+      operationId: getGenerationTask
+      responses:
+        "200":
+          description: Current generation task state.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GenerationTask"
+        "404":
+          $ref: "#/components/responses/NotFound"
 components:
   parameters:
     ProjectId:
       name: projectId
+      in: path
+      required: true
+      schema:
+        type: string
+        minLength: 1
+        maxLength: 64
+    RunId:
+      name: runId
       in: path
       required: true
       schema:
@@ -168,12 +356,14 @@ components:
           maxLength: 200
     UpdateProjectRequest:
       type: object
-      required: [title]
+      minProperties: 1
       properties:
         title:
           type: string
           minLength: 1
           maxLength: 200
+        viewport:
+          $ref: "#/components/schemas/CanvasViewport"
     ErrorResponse:
       type: object
       required: [code, message]
@@ -235,14 +425,14 @@ components:
         id: { type: string, minLength: 1, maxLength: 64 }
         type:
           type: string
-          enum: [text]
+          enum: [text, image, video]
         title: { type: string, maxLength: 200 }
         position:
           $ref: "#/components/schemas/CanvasPoint"
         size:
           $ref: "#/components/schemas/CanvasSize"
         data:
-          $ref: "#/components/schemas/TextNodeData"
+          $ref: "#/components/schemas/CanvasNodeData"
     CanvasEdge:
       type: object
       required: [id, source, target]
@@ -274,6 +464,14 @@ components:
       required: [text]
       properties:
         text: { type: string, minLength: 1 }
+    CanvasNodeData:
+      type: object
+      properties:
+        text: { type: string }
+        url: { type: string, format: uri }
+        coverUrl: { type: string, format: uri }
+        prompt: { type: string }
+        taskId: { type: string }
     NodeCreateOperation:
       type: object
       required: [type, node]
@@ -356,3 +554,98 @@ components:
         revision: { type: integer, minimum: 2 }
         project:
           $ref: "#/components/schemas/Project"
+    AgentSession:
+      type: object
+      required: [id, projectId, title, createdAt, updatedAt]
+      properties:
+        id: { type: string }
+        projectId: { type: string }
+        title: { type: string }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    CreateAgentRunRequest:
+      type: object
+      required: [message]
+      properties:
+        sessionId: { type: string }
+        message: { type: string, minLength: 1, maxLength: 10000 }
+        selectedNodeIds:
+          type: array
+          maxItems: 100
+          items: { type: string }
+    AgentRunStatus:
+      type: string
+      enum: [queued, running, succeeded, failed, cancelled]
+    AgentProposal:
+      type: object
+      required: [explanation, expectedRevision, operations]
+      properties:
+        explanation: { type: string }
+        expectedRevision: { type: integer, minimum: 1 }
+        operations:
+          type: array
+          maxItems: 100
+          items:
+            oneOf:
+              - $ref: "#/components/schemas/NodeCreateOperation"
+              - $ref: "#/components/schemas/NodeUpdateOperation"
+              - $ref: "#/components/schemas/NodeMoveOperation"
+              - $ref: "#/components/schemas/NodeDeleteOperation"
+              - $ref: "#/components/schemas/EdgeCreateOperation"
+              - $ref: "#/components/schemas/EdgeDeleteOperation"
+            discriminator:
+              propertyName: type
+    AgentRun:
+      type: object
+      required: [id, projectId, sessionId, status, message, createdAt, updatedAt]
+      properties:
+        id: { type: string }
+        projectId: { type: string }
+        sessionId: { type: string }
+        status:
+          $ref: "#/components/schemas/AgentRunStatus"
+        message: { type: string }
+        proposal:
+          $ref: "#/components/schemas/AgentProposal"
+        error: { type: string }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    ModelProfile:
+      type: object
+      required: [id, provider, upstreamModel, capability, defaults]
+      properties:
+        id: { type: string }
+        provider: { type: string }
+        upstreamModel: { type: string }
+        capability:
+          type: string
+          enum: [agent, image, video]
+        defaults:
+          type: object
+          additionalProperties: true
+    CreateGenerationRequest:
+      type: object
+      required: [modelId, prompt]
+      properties:
+        modelId: { type: string }
+        prompt: { type: string, minLength: 1, maxLength: 5000 }
+        imageUrl: { type: string, format: uri }
+        size: { type: string }
+        fps: { type: integer, enum: [30, 60] }
+        quality: { type: string, enum: [speed, quality] }
+        withAudio: { type: boolean }
+    GenerationTask:
+      type: object
+      required: [id, projectId, kind, modelId, status, prompt, createdAt, updatedAt]
+      properties:
+        id: { type: string }
+        projectId: { type: string }
+        kind: { type: string, enum: [image, video] }
+        modelId: { type: string }
+        status: { type: string, enum: [queued, running, succeeded, failed] }
+        prompt: { type: string }
+        resultUrl: { type: string }
+        coverUrl: { type: string }
+        error: { type: string }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }

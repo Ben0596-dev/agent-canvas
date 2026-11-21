@@ -7,6 +7,7 @@
 - GORM with PostgreSQL for persistence
 - Explicit SQL migrations under `migrations/`; application startup never runs `AutoMigrate`
 - OpenAPI 3.1 contract at `../contracts/openapi.yaml`
+- YAML runtime configuration from `config.yaml`; keep its committed shape in `config.example.yaml`
 
 ## Four-Layer Architecture
 
@@ -22,6 +23,10 @@ controller → service → repository → model
 - `model/`: define database entity structures, GORM column tags, relationships, and `TableName` mappings. Models contain structure declarations rather than query execution or HTTP behavior. HTTP request and response DTOs belong to the controller layer.
 
 `cmd/server/main.go` is the composition root. It may construct concrete adapters and inject them into services and controllers; business behavior does not belong there. Shared infrastructure such as database initialization stays under `internal/platform/`.
+
+## Configuration
+
+Load Go application settings only from the YAML file selected by `-config`; Docker Compose mounts the file but does not duplicate application settings. Add new keys to `config.example.yaml`, the strict decoder, validation, and config tests together. Keep `config.yaml` ignored because it contains credentials. Never log decoded configuration or API keys.
 
 ## Contract-First TDD
 

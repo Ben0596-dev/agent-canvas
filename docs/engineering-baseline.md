@@ -3,6 +3,16 @@
 ## 本地命令
 
 ```bash
+docker compose up -d postgres
+
+cd backend && go run ./cmd/server -config config.yaml
+
+cd ../web && pnpm dev
+```
+
+完整验证：
+
+```bash
 cd web && pnpm install && pnpm check
 cd ../backend && go test ./... && go vet ./...
 ```
@@ -24,13 +34,31 @@ cd ../backend && go test ./... && go vet ./...
 - Controller DTO 与 Model 分离；禁止在启动流程调用 AutoMigrate。
 - `contracts/openapi.yaml` 是 HTTP 契约的唯一来源。
 
-## 环境变量
+## 配置文件
 
-| 变量                   | 用途                         | 默认                    |
-| ---------------------- | ---------------------------- | ----------------------- |
-| `APP_ENV`              | 运行环境                     | `development`           |
-| `HTTP_ADDR`            | Go 服务监听地址              | `:8080`                 |
-| `DATABASE_URL`         | PostgreSQL 连接串            | 空（开发允许无库启动）  |
-| `BACKEND_INTERNAL_URL` | Next.js 服务端代理的后端地址 | `http://127.0.0.1:8080` |
+Go 应用只从 YAML 配置读取运行参数：
+
+- `backend/config.example.yaml`：提交到 Git，定义完整配置结构和安全默认值。
+- `backend/config.yaml`：本机实际配置，包含数据库连接和模型密钥，被 Git 忽略。
+- `-config`：启动参数，默认读取当前工作目录的 `config.yaml`。
+
+首次配置：
+
+```bash
+cp backend/config.example.yaml backend/config.yaml
+chmod 600 backend/config.yaml
+```
+
+本地开发时 Docker Compose 只启动 PostgreSQL，默认映射到 `127.0.0.1:5432`。Go 和 Next.js 均在 WSL 本地运行；Go 从 `backend/config.yaml` 读取数据库地址，Next.js 默认代理到 `127.0.0.1:8080`。
+
+Backend/Web 的 Dockerfile仍保留用于镜像构建和部署，但不参与本地开发 Compose。
+
+智谱模式使用以下内部模型映射：
+
+- `canvas-agent` → `glm-4.7-flash`
+- `canvas-image-fast` → `cogview-3-flash`
+- `canvas-video-fast` → `cogvideox-flash`
+
+在 `backend/config.yaml` 中填写密钥并把 `agent.provider` 设置为 `zhipu`。密钥不得写入 Compose、示例配置、源码或提交记录。
 
 生产部署必须显式提供数据库连接、签名密钥和模型凭据；任何 secret 都不得进入前端变量或日志。

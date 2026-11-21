@@ -2,6 +2,7 @@ package memory
 
 import (
 	"context"
+	"encoding/json"
 	"sort"
 	"strings"
 	"sync"
@@ -62,6 +63,28 @@ func (r *ProjectRepository) UpdateTitle(_ context.Context, id string, title stri
 		return model.Project{}, repository.ErrProjectNotFound
 	}
 	project.Title = title
+	project.UpdatedAt = updatedAt
+	r.projects[id] = project
+	return project, nil
+}
+
+func (r *ProjectRepository) UpdateViewport(_ context.Context, id string, viewport model.Viewport, updatedAt time.Time) (model.Project, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	project, ok := r.projects[id]
+	if !ok {
+		return model.Project{}, repository.ErrProjectNotFound
+	}
+	var snapshot model.CanvasSnapshot
+	if err := json.Unmarshal(project.SnapshotJSON, &snapshot); err != nil {
+		return model.Project{}, err
+	}
+	snapshot.Viewport = viewport
+	encoded, err := json.Marshal(snapshot)
+	if err != nil {
+		return model.Project{}, err
+	}
+	project.SnapshotJSON = encoded
 	project.UpdatedAt = updatedAt
 	r.projects[id] = project
 	return project, nil

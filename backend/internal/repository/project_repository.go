@@ -18,6 +18,7 @@ type ProjectRepository interface {
 	List(ctx context.Context) ([]model.Project, error)
 	Get(ctx context.Context, id string) (model.Project, error)
 	UpdateTitle(ctx context.Context, id string, title string, updatedAt time.Time) (model.Project, error)
+	UpdateViewport(ctx context.Context, id string, viewport model.Viewport, updatedAt time.Time) (model.Project, error)
 	Delete(ctx context.Context, id string) error
 	GetByOperationRequest(ctx context.Context, id string, requestID string) (model.Project, bool, error)
 	UpdateSnapshot(ctx context.Context, id string, requestID string, expectedRevision int64, snapshot []byte, updatedAt time.Time) (model.Project, error)

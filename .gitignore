@@ -21,6 +21,7 @@ lerna-debug.log*
 .env
 .env.*
 !.env.example
+/backend/config.yaml
 
 # ---- Node（递归匹配 web/ 和 server/）----
 node_modules

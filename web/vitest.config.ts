@@ -5,4 +5,8 @@ export default defineConfig({
     environment: "node",
     include: ["**/*.{test,spec}.{ts,tsx}"],
   },
+  server: {
+    host: "0.0.0.0",
+    port: 3001,
+  },
 });

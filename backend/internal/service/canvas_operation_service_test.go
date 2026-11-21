@@ -199,3 +199,40 @@ func TestApplyOperationsSupportsEditMoveConnectAndCascadingDelete(t *testing.T) 
 		t.Fatalf("expected node and related edge removed, got %+v", snapshot)
 	}
 }
+
+func TestApplyOperationsCreatesGeneratedMediaNodes(t *testing.T) {
+	repository := memory.NewProjectRepository()
+	projectService := NewProjectService(repository, time.Now, func() string { return "project-1" })
+	created, err := projectService.Create(context.Background(), "Media")
+	if err != nil {
+		t.Fatalf("create project: %v", err)
+	}
+	updated, err := projectService.ApplyOperations(context.Background(), created.ID, "media-request", 1, []model.CanvasOperation{
+		{
+			Type: model.OperationNodeCreate,
+			Node: &model.CanvasNode{
+				ID: "image-1", Type: model.NodeTypeImage, Title: "生成图片",
+				Size: model.CanvasSize{Width: 360, Height: 320},
+				Data: model.CanvasNodeData{URL: "https://cdn.example/image.png", Prompt: "未来城市", TaskID: "task-1"},
+			},
+		},
+		{
+			Type: model.OperationNodeCreate,
+			Node: &model.CanvasNode{
+				ID: "video-1", Type: model.NodeTypeVideo, Title: "生成视频",
+				Size: model.CanvasSize{Width: 480, Height: 320},
+				Data: model.CanvasNodeData{URL: "https://cdn.example/video.mp4", Prompt: "猫在奔跑", TaskID: "task-2"},
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("apply media operations: %v", err)
+	}
+	var snapshot model.CanvasSnapshot
+	if err := json.Unmarshal(updated.SnapshotJSON, &snapshot); err != nil {
+		t.Fatalf("decode snapshot: %v", err)
+	}
+	if len(snapshot.Nodes) != 2 || snapshot.Nodes[0].Type != model.NodeTypeImage || snapshot.Nodes[1].Type != model.NodeTypeVideo {
+		t.Fatalf("unexpected media nodes: %+v", snapshot.Nodes)
+	}
+}

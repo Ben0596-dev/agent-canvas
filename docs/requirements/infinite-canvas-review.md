@@ -17,7 +17,7 @@
 4. 用户预览并确认 Operation，系统以一次 Revision 原子提交。
 5. 页面刷新后恢复项目、视口和最近一次 Agent 会话。
 
-一期明确不承诺多人实时协作、复杂媒体供应商编排、视频/音频生成、插件市场和 Python 运行时。图片节点可以预留类型，但不作为一期验收前提。
+一期明确不承诺多人实时协作、复杂多供应商编排、音频生成、插件市场和 Python 运行时。根据后续确认，智谱图片和视频生成作为扩展能力纳入实现。
 
 ## 2. 参考项目的取舍
 
@@ -54,7 +54,7 @@
 
 ### 3.2 建议交付（P1）
 
-- 图片节点：上传一张图片并作为 Agent 上下文引用，但先不接图片生成供应商。
+- 图片和视频节点：接入智谱 CogView-3-Flash 与 CogVideoX-Flash，生成结果以 Task 管理。
 - Operation 预览：在画布上高亮将新增、修改和删除的节点。
 - 自动保存状态提示、离线草稿和最近项目。
 - Agent 生成文本节点和连接的快捷指令。
@@ -62,7 +62,7 @@
 ### 3.3 明确排除（一期不验收）
 
 - 多人实时协作、在线 presence、冲突合并和权限分享。
-- 视频/音频生成、工作流节点、供应商协议适配和计费。
+- 音频生成、工作流节点、多供应商计费和本地 GPU 推理。
 - 任意代码执行、浏览器自动化、文件系统写入等高权限 Agent 工具。
 - 以 Python 作为产品请求链路的必要依赖。
 
@@ -193,9 +193,9 @@ backend/internal/
 
 ## 9. 当前实现状态
 
-- `contracts/openapi.yaml` 已覆盖项目 CRUD、Canvas Operation 批次和 revision 冲突；Agent Run 与 SSE 契约待下一切片补充。
-- `web/app/page.tsx` 已替换为项目入口，并新增基于 React Flow adapter 的画布工作台。
-- `backend/internal` 已按四层架构实现项目和 Operation 接口，业务规则位于 Service。
+- `contracts/openapi.yaml` 已覆盖项目 CRUD、Canvas Operation、Agent Session/Run、SSE 和 revision 冲突。
+- `web/app/page.tsx` 已替换为项目入口，并新增基于 React Flow adapter 的画布工作台、Agent Proposal 预览确认和会话恢复。
+- `backend/internal` 已按四层架构实现项目、Operation 和 Agent 接口，业务规则位于 Service。
 - 旧的根目录 `server/main.go` 已删除，Go 应用唯一入口为 `backend/cmd/server/main.go`。
 
 ## 10. 评审出口

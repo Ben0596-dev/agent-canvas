@@ -19,31 +19,61 @@ import {
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
+import type { AgentProposal } from "@/domain/agent/types";
+import { previewProposal } from "@/domain/agent/proposal";
+import { createHistoryEntry, type HistoryEntry } from "@/domain/canvas/history";
 import type { CanvasOperation, Project } from "@/domain/canvas/types";
-import { applyOperations, getProject } from "@/lib/api/projects";
+import type { GenerationTask } from "@/domain/generation/types";
+import { AgentPanel } from "@/features/agent/agent-panel";
+import { GenerationPanel } from "@/features/generation/generation-panel";
+import { applyOperations, getProject, updateProjectViewport } from "@/lib/api/projects";
 
 import { TextCanvasNode, type TextCanvasNodeData } from "./text-canvas-node";
+import { MediaCanvasNode, type MediaCanvasNodeData } from "./media-canvas-node";
 
-type TextFlowNode = Node<TextCanvasNodeData, "text">;
-const nodeTypes: NodeTypes = { text: TextCanvasNode };
+type CanvasFlowNode =
+  Node<TextCanvasNodeData, "text"> | Node<MediaCanvasNodeData, "image" | "video">;
+const nodeTypes: NodeTypes = {
+  text: TextCanvasNode,
+  image: MediaCanvasNode,
+  video: MediaCanvasNode,
+};
 
 export function CanvasWorkspace({ projectId }: { projectId: string }) {
   const [project, setProject] = useState<Project | null>(null);
-  const [nodes, setNodes, onNodesChange] = useNodesState<TextFlowNode>([]);
+  const [nodes, setNodes, onNodesChange] = useNodesState<CanvasFlowNode>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
   const [status, setStatus] = useState("正在载入画布…");
+  const [agentProposal, setAgentProposal] = useState<AgentProposal | null>(null);
+  const [undoStack, setUndoStack] = useState<HistoryEntry[]>([]);
+  const [redoStack, setRedoStack] = useState<HistoryEntry[]>([]);
 
   const commit = useCallback(
-    async (operations: CanvasOperation[]) => {
-      if (!project || operations.length === 0) return;
+    async (
+      operations: CanvasOperation[],
+      expectedRevision?: number,
+      recordHistory = true,
+    ): Promise<boolean> => {
+      if (!project || operations.length === 0) return false;
+      const history = recordHistory ? createHistoryEntry(project.snapshot, operations) : null;
       try {
-        const updated = await applyOperations(project.id, project.revision, operations);
+        const updated = await applyOperations(
+          project.id,
+          expectedRevision ?? project.revision,
+          operations,
+        );
         setProject(updated);
+        if (history) {
+          setUndoStack((current) => [...current, history]);
+          setRedoStack([]);
+        }
         setStatus("已保存");
+        return true;
       } catch (error) {
         setStatus(error instanceof Error ? error.message : "保存失败");
         const latest = await getProject(project.id).catch(() => null);
         if (latest) setProject(latest);
+        return false;
       }
     },
     [project],
@@ -62,22 +92,48 @@ export function CanvasWorkspace({ projectId }: { projectId: string }) {
 
   useEffect(() => {
     if (!project) return;
+    const snapshot = agentProposal
+      ? previewProposal(project.snapshot, agentProposal)
+      : project.snapshot;
+    const savedNodeIDs = new Set(project.snapshot.nodes.map((node) => node.id));
     setNodes(
-      project.snapshot.nodes.map((node) => ({
-        id: node.id,
-        type: "text" as const,
-        position: node.position,
-        style: { width: node.size.width, height: node.size.height },
-        data: {
-          title: node.title,
-          text: node.data.text,
-          onCommit: (text: string) =>
-            void commit([{ type: "node.update", nodeId: node.id, data: { text } }]),
-        },
-      })),
+      snapshot.nodes.map((node): CanvasFlowNode => {
+        const common = {
+          id: node.id,
+          position: node.position,
+          style: { width: node.size.width, height: node.size.height },
+          deletable: savedNodeIDs.has(node.id),
+        };
+        if (node.type === "text") {
+          return {
+            ...common,
+            type: "text",
+            data: {
+              title: node.title,
+              text: node.data.text ?? "",
+              preview: !savedNodeIDs.has(node.id),
+              onCommit: (text: string) =>
+                void commit([{ type: "node.update", nodeId: node.id, data: { text } }]),
+            },
+          };
+        }
+        return {
+          ...common,
+          type: node.type,
+          data: {
+            kind: node.type,
+            title: node.title,
+            url: node.data.url ?? "",
+            coverUrl: node.data.coverUrl,
+            prompt: node.data.prompt,
+            preview: !savedNodeIDs.has(node.id),
+          },
+        };
+      }),
     );
-    setEdges(project.snapshot.edges.map((edge) => ({ ...edge })));
-  }, [commit, project, setEdges, setNodes]);
+    const savedEdgeIDs = new Set(project.snapshot.edges.map((edge) => edge.id));
+    setEdges(snapshot.edges.map((edge) => ({ ...edge, deletable: savedEdgeIDs.has(edge.id) })));
+  }, [agentProposal, commit, project, setEdges, setNodes]);
 
   const onConnect = useCallback(
     (connection: Connection) => {
@@ -113,6 +169,41 @@ export function CanvasWorkspace({ projectId }: { projectId: string }) {
     ]);
   }
 
+  async function undo() {
+    const entry = undoStack.at(-1);
+    if (!entry || !(await commit(entry.inverse, undefined, false))) return;
+    setUndoStack((current) => current.slice(0, -1));
+    setRedoStack((current) => [...current, entry]);
+  }
+
+  async function redo() {
+    const entry = redoStack.at(-1);
+    if (!entry || !(await commit(entry.forward, undefined, false))) return;
+    setRedoStack((current) => current.slice(0, -1));
+    setUndoStack((current) => [...current, entry]);
+  }
+
+  function addGeneratedMedia(task: GenerationTask): Promise<boolean> {
+    return commit([
+      {
+        type: "node.create",
+        node: {
+          id: crypto.randomUUID(),
+          type: task.kind,
+          title: task.kind === "image" ? "生成图片" : "生成视频",
+          position: { x: 180 + nodes.length * 24, y: 180 + nodes.length * 24 },
+          size: task.kind === "image" ? { width: 360, height: 320 } : { width: 480, height: 320 },
+          data: {
+            url: task.resultUrl,
+            coverUrl: task.coverUrl,
+            prompt: task.prompt,
+            taskId: task.id,
+          },
+        },
+      },
+    ]);
+  }
+
   return (
     <main className="flex h-screen min-h-[640px] flex-col bg-slate-100">
       <header className="flex h-16 items-center justify-between border-b border-slate-200 bg-white px-5">
@@ -126,6 +217,20 @@ export function CanvasWorkspace({ projectId }: { projectId: string }) {
         <div className="flex items-center gap-4">
           <span className="text-xs text-slate-500">{status}</span>
           <button
+            className="rounded-lg border border-slate-300 px-3 py-2 text-sm disabled:opacity-40"
+            disabled={undoStack.length === 0}
+            onClick={() => void undo()}
+          >
+            撤销
+          </button>
+          <button
+            className="rounded-lg border border-slate-300 px-3 py-2 text-sm disabled:opacity-40"
+            disabled={redoStack.length === 0}
+            onClick={() => void redo()}
+          >
+            重做
+          </button>
+          <button
             className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white"
             onClick={addTextNode}
           >
@@ -133,31 +238,49 @@ export function CanvasWorkspace({ projectId }: { projectId: string }) {
           </button>
         </div>
       </header>
-      <section className="min-h-0 flex-1">
-        <ReactFlow<TextFlowNode, Edge>
-          nodes={nodes}
-          edges={edges}
-          nodeTypes={nodeTypes}
-          defaultViewport={initialViewport}
-          onNodesChange={onNodesChange}
-          onEdgesChange={onEdgesChange}
-          onConnect={onConnect}
-          onNodeDragStop={(_, node) =>
-            void commit([{ type: "node.move", nodeId: node.id, position: node.position }])
-          }
-          onNodesDelete={(deleted) =>
-            void commit(deleted.map((node) => ({ type: "node.delete", nodeId: node.id })))
-          }
-          onEdgesDelete={(deleted) =>
-            void commit(deleted.map((edge) => ({ type: "edge.delete", edgeId: edge.id })))
-          }
-          fitView={nodes.length > 0}
-        >
-          <Background variant={BackgroundVariant.Dots} gap={20} size={1.2} />
-          <Controls />
-          <MiniMap pannable zoomable />
-        </ReactFlow>
-      </section>
+      <div className="flex min-h-0 flex-1">
+        <section className="min-h-0 min-w-0 flex-1">
+          <ReactFlow<CanvasFlowNode, Edge>
+            nodes={nodes}
+            edges={edges}
+            nodeTypes={nodeTypes}
+            defaultViewport={initialViewport}
+            onNodesChange={onNodesChange}
+            onEdgesChange={onEdgesChange}
+            onConnect={onConnect}
+            onMoveEnd={(_, viewport) =>
+              void updateProjectViewport(projectId, viewport)
+                .then(setProject)
+                .catch((error: unknown) =>
+                  setStatus(error instanceof Error ? error.message : "视口保存失败"),
+                )
+            }
+            onNodeDragStop={(_, node) =>
+              void commit([{ type: "node.move", nodeId: node.id, position: node.position }])
+            }
+            onNodesDelete={(deleted) =>
+              void commit(deleted.map((node) => ({ type: "node.delete", nodeId: node.id })))
+            }
+            onEdgesDelete={(deleted) =>
+              void commit(deleted.map((edge) => ({ type: "edge.delete", edgeId: edge.id })))
+            }
+            fitView={nodes.length > 0}
+          >
+            <Background variant={BackgroundVariant.Dots} gap={20} size={1.2} />
+            <Controls />
+            <MiniMap pannable zoomable />
+          </ReactFlow>
+        </section>
+        <aside className="flex w-[360px] shrink-0 flex-col border-l border-slate-200 bg-white">
+          <AgentPanel
+            projectId={projectId}
+            proposal={agentProposal}
+            onProposalChange={setAgentProposal}
+            onConfirm={(proposal) => commit(proposal.operations, proposal.expectedRevision)}
+          />
+          <GenerationPanel projectId={projectId} onGenerated={addGeneratedMedia} />
+        </aside>
+      </div>
     </main>
   );
 }

@@ -18,7 +18,7 @@ func TestCreateAndGetProject(t *testing.T) {
 	projectService := service.NewProjectService(repository, func() time.Time {
 		return time.Date(2026, 11, 19, 0, 0, 0, 0, time.UTC)
 	}, func() string { return "project-1" })
-	router := NewRouter(projectService)
+	router := NewRouter(projectService, nil, nil, nil)
 
 	create := httptest.NewRecorder()
 	router.ServeHTTP(create, httptest.NewRequest(http.MethodPost, "/api/v1/projects", bytes.NewBufferString(`{"title":"  Sprint plan  "}`)))
@@ -42,7 +42,7 @@ func TestCreateAndGetProject(t *testing.T) {
 
 func TestCreateProjectRejectsBlankTitle(t *testing.T) {
 	projectService := service.NewProjectService(memory.NewProjectRepository(), time.Now, func() string { return "project-1" })
-	router := NewRouter(projectService)
+	router := NewRouter(projectService, nil, nil, nil)
 
 	response := httptest.NewRecorder()
 	router.ServeHTTP(response, httptest.NewRequest(http.MethodPost, "/api/v1/projects", bytes.NewBufferString(`{"title":"   "}`)))
@@ -53,7 +53,7 @@ func TestCreateProjectRejectsBlankTitle(t *testing.T) {
 
 func TestGetProjectReturnsNotFound(t *testing.T) {
 	projectService := service.NewProjectService(memory.NewProjectRepository(), time.Now, func() string { return "project-1" })
-	router := NewRouter(projectService)
+	router := NewRouter(projectService, nil, nil, nil)
 
 	response := httptest.NewRecorder()
 	router.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/api/v1/projects/missing", nil))
@@ -68,7 +68,7 @@ func TestApplyOperationsCreatesNode(t *testing.T) {
 	if _, err := projectService.Create(context.Background(), "Plan"); err != nil {
 		t.Fatalf("create project: %v", err)
 	}
-	router := NewRouter(projectService)
+	router := NewRouter(projectService, nil, nil, nil)
 
 	response := httptest.NewRecorder()
 	body := `{
@@ -105,7 +105,7 @@ func TestApplyOperationsReturnsRevisionConflict(t *testing.T) {
 	if _, err := projectService.Create(context.Background(), "Plan"); err != nil {
 		t.Fatalf("create project: %v", err)
 	}
-	router := NewRouter(projectService)
+	router := NewRouter(projectService, nil, nil, nil)
 
 	response := httptest.NewRecorder()
 	body := `{
@@ -145,7 +145,7 @@ func TestListRenameAndDeleteProject(t *testing.T) {
 	if _, err := projectService.Create(context.Background(), "Draft"); err != nil {
 		t.Fatalf("create project: %v", err)
 	}
-	router := NewRouter(projectService)
+	router := NewRouter(projectService, nil, nil, nil)
 
 	list := httptest.NewRecorder()
 	router.ServeHTTP(list, httptest.NewRequest(http.MethodGet, "/api/v1/projects", nil))
@@ -169,5 +169,31 @@ func TestListRenameAndDeleteProject(t *testing.T) {
 	router.ServeHTTP(missing, httptest.NewRequest(http.MethodGet, "/api/v1/projects/project-1", nil))
 	if missing.Code != http.StatusNotFound {
 		t.Fatalf("expected deleted project to return 404, got %d", missing.Code)
+	}
+}
+
+func TestUpdateViewportDoesNotAdvanceSemanticRevision(t *testing.T) {
+	repository := memory.NewProjectRepository()
+	projectService := service.NewProjectService(repository, time.Now, func() string { return "project-1" })
+	if _, err := projectService.Create(context.Background(), "Plan"); err != nil {
+		t.Fatalf("create project: %v", err)
+	}
+	router := NewRouter(projectService, nil, nil, nil)
+
+	response := httptest.NewRecorder()
+	router.ServeHTTP(response, httptest.NewRequest(
+		http.MethodPatch,
+		"/api/v1/projects/project-1",
+		bytes.NewBufferString(`{"viewport":{"x":120,"y":80,"zoom":1.5}}`),
+	))
+	if response.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", response.Code, response.Body.String())
+	}
+	var project projectResponse
+	if err := json.Unmarshal(response.Body.Bytes(), &project); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if project.Revision != 1 || project.Snapshot.Viewport.Zoom != 1.5 {
+		t.Fatalf("unexpected viewport update: %+v", project)
 	}
 }

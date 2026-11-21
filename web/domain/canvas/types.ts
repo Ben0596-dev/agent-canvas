@@ -4,11 +4,17 @@ export type CanvasViewport = CanvasPoint & { zoom: number };
 
 export type CanvasNode = {
   id: string;
-  type: "text";
+  type: "text" | "image" | "video";
   title: string;
   position: CanvasPoint;
   size: CanvasSize;
-  data: { text: string };
+  data: {
+    text?: string;
+    url?: string;
+    coverUrl?: string;
+    prompt?: string;
+    taskId?: string;
+  };
 };
 
 export type CanvasEdge = {

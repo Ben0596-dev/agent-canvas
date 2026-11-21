@@ -2,6 +2,7 @@ package gorm
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"time"
 
@@ -43,6 +44,26 @@ func (r *ProjectRepository) UpdateTitle(ctx context.Context, id string, title st
 	result := r.db.WithContext(ctx).Model(&model.Project{}).
 		Where("id = ? AND user_id = ?", id, "default").
 		Updates(map[string]any{"title": title, "updated_at": updatedAt})
+	if result.Error != nil {
+		return model.Project{}, result.Error
+	}
+	if result.RowsAffected == 0 {
+		return model.Project{}, repository.ErrProjectNotFound
+	}
+	return r.Get(ctx, id)
+}
+
+func (r *ProjectRepository) UpdateViewport(ctx context.Context, id string, viewport model.Viewport, updatedAt time.Time) (model.Project, error) {
+	encoded, err := json.Marshal(viewport)
+	if err != nil {
+		return model.Project{}, err
+	}
+	result := r.db.WithContext(ctx).Model(&model.Project{}).
+		Where("id = ? AND user_id = ?", id, "default").
+		Updates(map[string]any{
+			"snapshot_json": gorm.Expr("jsonb_set(snapshot_json, '{viewport}', ?::jsonb, true)", string(encoded)),
+			"updated_at":    updatedAt,
+		})
 	if result.Error != nil {
 		return model.Project{}, result.Error
 	}

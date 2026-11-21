@@ -1,0 +1,26 @@
+app:
+  environment: development
+
+http:
+  addr: ":8080"
+
+database:
+  # PostgreSQL runs in Docker and publishes port 5432 to the WSL host.
+  url: postgres://agent_canvas:agent_canvas@127.0.0.1:5432/agent_canvas?sslmode=disable
+  allow_no_db: false
+
+agent:
+  # local | zhipu | openai-compatible
+  provider: local
+  openai_compatible:
+    base_url: https://api.openai.com/v1
+    api_key: ""
+    model: ""
+
+zhipu:
+  base_url: https://open.bigmodel.cn/api/paas/v4
+  api_key: ""
+  models:
+    agent: glm-4.7-flash
+    image: cogview-3-flash
+    video: cogvideox-flash
